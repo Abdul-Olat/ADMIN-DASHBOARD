@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Admin Dashboard — React + TypeScript</title>
+<style>
+:root{--bg:#f5f6fa;--card:#fff;--tx:#161a23;--mu:#6b7385;--bd:#e3e6ee;--ac:#4f46e5;--ok:#16a34a;--wa:#d97706;--er:#dc2626;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:light}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1017;--card:#171a24;--tx:#eceef5;--mu:#8b93a8;--bd:#262a38;--ac:#818cf8;color-scheme:dark}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+.app{display:grid;grid-template-columns:200px 1fr;min-height:100vh}
+aside{background:var(--card);border-right:1px solid var(--bd);padding:20px 14px}
+aside h1{font-size:16px;margin:0 0 20px}aside a{display:block;padding:8px 10px;border-radius:8px;color:var(--mu);margin-bottom:2px}
+aside a.on{background:color-mix(in srgb,var(--ac) 14%,transparent);color:var(--ac);font-weight:600}
+main{padding:22px;min-width:0}h2{margin:0 0 16px;font-size:20px}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:14px}
+.two{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:16px;min-width:0}
+.lbl{color:var(--mu);font-size:12px}.val{font-size:24px;font-weight:700}.up{color:var(--ok)}.dn{color:var(--er)}
+svg{width:100%;height:auto;display:block}
+.bar{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
+input,select{background:var(--bg);color:var(--tx);border:1px solid var(--bd);border-radius:8px;padding:7px 10px;font:inherit}
+.tw{overflow-x:auto}table{width:100%;border-collapse:collapse;margin-top:10px}
+th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--bd);white-space:nowrap}
+th{color:var(--mu);font-weight:600;cursor:pointer;user-select:none}
+.b{padding:2px 8px;border-radius:99px;font-size:12px;font-weight:600}
+.Paid{background:#16a34a22;color:var(--ok)}.Pending{background:#d9770622;color:var(--wa)}.Refunded{background:#dc262622;color:var(--er)}
+@media(max-width:700px){.app{grid-template-columns:1fr}aside{display:flex;gap:6px;align-items:center;overflow-x:auto;border-right:0;border-bottom:1px solid var(--bd);padding:10px}aside h1{margin:0 10px 0 0}aside a{margin:0}}
+</style></head><body><div id="root"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.4/babel.min.js"></script>
+<script type="text/plain" id="src">
+const { useState, useMemo } = React;
+
+type Status = 'Paid' | 'Pending' | 'Refunded';
+interface Order { id: number; customer: string; amount: number; status: Status }
+interface StatProps { label: string; value: string; delta: number }
+interface Column<T> { key: keyof T; label: string; render?: (row: T) => React.ReactNode }
+type SortDir = 'asc' | 'desc';
+
+const names = ['Ava','Liam','Noah','Mia','Zoe','Eli','Ivy','Kai','Leo','Uma'];
+const statuses: Status[] = ['Paid', 'Pending', 'Refunded'];
+const orders: Order[] = Array.from({ length: 28 }, (_, i) => ({
+  id: 1000 + i,
+  customer: names[i % 10] + ' ' + String.fromCharCode(65 + (i * 7) % 26) + '.',
+  amount: 40 + ((i * 137) % 460),
+  status: statuses[i % 7 === 0 ? 2 : i % 3 === 0 ? 1 : 0],
+}));
+const revenue = [12, 18, 15, 24, 28, 26, 34, 38, 35, 44, 48, 53];
+const signups = [30, 45, 38, 60, 52, 70, 64];
+const days = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+
+function Card({ title, children }: { title?: string; children: React.ReactNode }) {
+  return <section className="card">{title && <div className="lbl">{title}</div>}{children}</section>;
+}
+
+function Stat({ label, value, delta }: StatProps) {
+  return (
+    <Card title={label}>
+      <div className="val">{value}</div>
+      <div className={delta >= 0 ? 'up' : 'dn'}>{delta >= 0 ? '▲' : '▼'} {Math.abs(delta)}%</div>
+    </Card>
+  );
+}
+
+function LineChart({ data }: { data: number[] }) {
+  const w = 300, h = 110, max = Math.max(...data);
+  const pts = data.map((v, i) => [(i / (data.length - 1)) * w, h - (v / max) * (h - 8)]);
+  const line = pts.map(p => p.join(',')).join(' ');
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} role="img" aria-label="Revenue trend">
+      <polygon points={`0,${h} ${line} ${w},${h}`} fill="var(--ac)" opacity=".15" />
+      <polyline points={line} fill="none" stroke="var(--ac)" strokeWidth="2.5" strokeLinejoin="round" />
+      {pts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r="2.5" fill="var(--ac)" />)}
+    </svg>
+  );
+}
+
+function BarChart({ data, labels }: { data: number[]; labels: string[] }) {
+  const w = 300, h = 110, max = Math.max(...data), bw = w / data.length;
+  return (
+    <svg viewBox={`0 0 ${w} ${h + 16}`} role="img" aria-label="Weekly signups">
+      {data.map((v, i) => {
+        const bh = (v / max) * h;
+        return (
+          <g key={i}>
+            <rect x={i * bw + 6} y={h - bh} width={bw - 12} height={bh} rx="4" fill="var(--ac)" />
+            <text x={i * bw + bw / 2} y={h + 12} textAnchor="middle" fontSize="9" fill="var(--mu)">{labels[i]}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+function DataTable<T extends { id: number }>({ rows, cols }: { rows: T[]; cols: Column<T>[] }) {
+  const [key, setKey] = useState<keyof T>('id');
+  const [dir, setDir] = useState<SortDir>('asc');
+  const sorted = useMemo(() => [...rows].sort((a, b) => {
+    const r = a[key] > b[key] ? 1 : a[key] < b[key] ? -1 : 0;
+    return dir === 'asc' ? r : -r;
+  }), [rows, key, dir]);
+  const toggle = (k: keyof T) => { k === key ? setDir(dir === 'asc' ? 'desc' : 'asc') : (setKey(k), setDir('asc')); };
+  return (
+    <div className="tw"><table>
+      <thead><tr>{cols.map(c => (
+        <th key={String(c.key)} onClick={() => toggle(c.key)}>{c.label}{c.key === key ? (dir === 'asc' ? ' ↑' : ' ↓') : ''}</th>
+      ))}</tr></thead>
+      <tbody>{sorted.map(r => (
+        <tr key={r.id}>{cols.map(c => <td key={String(c.key)}>{c.render ? c.render(r) : String(r[c.key])}</td>)}</tr>
+      ))}</tbody>
+    </table>{sorted.length === 0 && <p className="lbl">No orders match.</p>}</div>
+  );
+}
+
+function App() {
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState<Status | 'All'>('All');
+  const filtered = useMemo(() => orders.filter(o =>
+    (status === 'All' || o.status === status) && o.customer.toLowerCase().includes(q.toLowerCase())), [q, status]);
+  const total = filtered.reduce((s, o) => s + o.amount, 0);
+  const cols: Column<Order>[] = [
+    { key: 'id', label: 'Order', render: o => '#' + o.id },
+    { key: 'customer', label: 'Customer' },
+    { key: 'amount', label: 'Amount', render: o => '$' + o.amount },
+    { key: 'status', label: 'Status', render: o => <span className={'b ' + o.status}>{o.status}</span> },
+  ];
+  return (
+    <div className="app">
+      <aside><h1>◆ Northwind</h1>
+        <a className="on" href="#">Overview</a><a href="#">Orders</a><a href="#">Customers</a><a href="#">Settings</a></aside>
+      <main>
+        <h2>Overview</h2>
+        <div className="grid">
+          <Stat label="Revenue" value="$48.2k" delta={12.4} />
+          <Stat label="Orders" value="1,284" delta={5.1} />
+          <Stat label="Customers" value="892" delta={8.7} />
+          <Stat label="Refund rate" value="2.3%" delta={-0.6} />
+        </div>
+        <div className="grid two">
+          <Card title="Revenue (last 12 months, $k)"><LineChart data={revenue} /></Card>
+          <Card title="Signups this week"><BarChart data={signups} labels={days} /></Card>
+        </div>
+        <Card title={`Recent orders — ${filtered.length} shown · $${total.toLocaleString()}`}>
+          <div className="bar">
+            <input placeholder="Search customer…" value={q} onChange={e => setQ(e.target.value)} />
+            <select value={status} onChange={e => setStatus(e.target.value as Status | 'All')}>
+              <option>All</option>{statuses.map(s => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <DataTable rows={filtered} cols={cols} />
+        </Card>
+      </main>
+    </div>
+  );
+}
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+<script>
+try{var out=Babel.transform(document.getElementById('src').textContent,{filename:'app.tsx',presets:[['typescript',{isTSX:true,allExtensions:true}],'react']}).code;new Function(out)()}catch(e){document.getElementById('root').textContent='Failed to load: '+e.message}
+</script></body></html>
